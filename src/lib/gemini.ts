@@ -355,10 +355,15 @@ export async function askGemini(
   ];
   const config = {
     systemInstruction: SYSTEM_PROMPT,
-    // 2400 tokens deja margen para respuestas académicas sin truncar.
-    maxOutputTokens: 2400,
-    // Thinking LOW reduce la latencia drásticamente.
-    thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    // 4096 tokens: en Gemini 3, los tokens de thinking cuentan contra
+    // maxOutputTokens. Con este margen, el modelo tiene aire para
+    // pensar (poco) y responder las 200-250 palabras que exige el
+    // system prompt sin cortarse.
+    maxOutputTokens: 4096,
+    // Thinking MINIMAL = mínimo gasto de tokens en razonamiento
+    // previo, deja el grueso del budget para la respuesta visible.
+    // Con LOW se comía ~2300 tokens y dejaba la respuesta en ~100.
+    thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
     // Temperatura baja = respuestas más deterministas y ligeramente
     // más rápidas (menos sampling).
     temperature: 0.3,
