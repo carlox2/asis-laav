@@ -251,6 +251,11 @@ export default function App() {
    *  reagenda speakPart() con un delay para reiniciar la lectura
    *  desde el principio. null si no hay loop pendiente. */
   const loopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** true mientras estamos en el delay entre ciclos del loop (entre
+   *  la última parte de un ciclo y la primera del siguiente). El
+   *  watchdog de TTS lo usa para no contar ese silencio como
+   *  "speech atascado" y matar la reproducción. */
+  const loopActiveRef = useRef(false);
 
   keyRef.current = savedKey;
   voicesRef.current = voices;
@@ -441,6 +446,7 @@ export default function App() {
         clearTimeout(loopTimeoutRef.current);
         loopTimeoutRef.current = null;
       }
+      loopActiveRef.current = false;
       synth.cancel(); // corta cualquier lectura previa
       stopWatchdog();
       speakActuallyPlayingRef.current = false;
@@ -547,9 +553,11 @@ export default function App() {
             // botón de voz siga mostrando Pausa y la cadena se pueda
             // interrumpir (con el botón de voz o empezando a grabar).
             partIndexRef.current = 0;
+            loopActiveRef.current = true; // el watchdog nos ignora durante el delay
             if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
             loopTimeoutRef.current = setTimeout(() => {
               loopTimeoutRef.current = null;
+              loopActiveRef.current = false;
               if (userPausedRef.current || phaseRef.current === "idle") return;
               speakPart();
             }, 1500);
@@ -590,6 +598,14 @@ export default function App() {
           return;
         }
         if (userPausedRef.current || synth.paused) {
+          consecutiveQuiet = 0;
+          return;
+        }
+        // En el delay entre ciclos del loop, synth.speaking queda en
+        // false por 1.5s. Sin este check, el watchdog contaría 3
+        // quiet ticks y mataría la reproducción antes de que arranque
+        // el siguiente ciclo.
+        if (loopActiveRef.current) {
           consecutiveQuiet = 0;
           return;
         }
