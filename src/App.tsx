@@ -554,12 +554,22 @@ export default function App() {
             // interrumpir (con el botón de voz o empezando a grabar).
             partIndexRef.current = 0;
             loopActiveRef.current = true; // el watchdog nos ignora durante el delay
+            // Beep de fin de ciclo (suena antes del delay, no durante).
+            sfx.endCycle();
             if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
             loopTimeoutRef.current = setTimeout(() => {
               loopTimeoutRef.current = null;
               loopActiveRef.current = false;
               if (userPausedRef.current || phaseRef.current === "idle") return;
-              speakPart();
+              // Warmup antes del primer utterance del nuevo ciclo: tras
+              // 1.5s de silencio el sinkId de Android se "desasienta"
+              // y sin este silencio de 250ms las primeras ~9 palabras
+              // se pierden (mismo motivo por el que el speak() inicial
+              // hace warmup antes de la primera parte).
+              void warmupOutput().then(async () => {
+                await new Promise((r) => setTimeout(r, 60));
+                speakPart();
+              });
             }, 1500);
           }
         };

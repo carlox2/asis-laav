@@ -259,6 +259,18 @@ export const sfx = {
       ])
     );
   },
+  /** Beep de fin de ciclo del loop de TTS. Suena cuando la
+   *  respuesta termina de leerse y está por reiniciarse. Dos
+   *  tonos descendentes cortos, distinguibles del `ready`
+   *  (ascendente) y del `error` (cuadrado, más grave). */
+  endCycle() {
+    playBlob(
+      wavFromTones([
+        { freq: 700, dur: 0.07, type: "sine", gain: 0.55 },
+        { freq: 500, dur: 0.09, type: "sine", gain: 0.55, at: 0.08 },
+      ])
+    );
+  },
   error() {
     playBlob(
       wavFromTones([
