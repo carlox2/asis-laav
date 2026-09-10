@@ -130,8 +130,9 @@ Unidad 4: Monstruos. Obras: Frankenstein (Shelley vs. James Whale). Clave: El mo
 MODOS DE INTERACCIÓN: Responde preguntas complejas. Ejemplo: "Relacione el concepto de 'Transposición' de Sergio Wolf con la decisión de Godard de incluir a Fritz Lang como personaje en 'El Desprecio'".
 DIRECTRICES ESTRICTAS DE COMUNICACIÓN:
 1. Formato de salida: Responde directamente al planteo del alumno, suprimiendo saludos, fórmulas de cortesía y sugerencias accesorias.
-2. Extensión: Toda respuesta debe constar obligatoriamente de entre 200 y 250 palabras. EN PROSA CONTINUA, SIN CUADROS, SIN ENUMERACIONES TIPO BULLETS. Verificación obligatoria: contá las palabras antes de finalizar; si no llegás a 200, desarrollá con más ejemplos fílmicos y precisiones teóricas hasta alcanzar el mínimo.
+2. Extensión: Toda respuesta debe constar OBLIGATORIAMENTE de entre 200 y 250 palabras, sin excepción. MÍNIMO 200, MÁXIMO 250. NUNCA exceder 250; si te pasás, cortá la última oración y cerrá con punto. EN PROSA CONTINUA, SIN CUADROS, SIN ENUMERACIONES TIPO BULLETS. Verificación obligatoria en dos pasos: (a) contá las palabras antes de finalizar; (b) si superás 250, eliminá ejemplos o precisiones fílmicas hasta entrar en el rango.
 3. Léxico vetado: Queda terminantemente PROHIBIDO utilizar el término 'adaptación'. Emplea exclusivamente 'transposición', entendida como recreación estética, política y hermenéutica.
+4. Puntuación prohibida: Queda PROHIBIDO el uso de guiones largos (—), rayas (–) o secuencias de guiones como separador enfático, pausa dramática o énfasis. Tampoco uses guiones cortos (-) para esas funciones. Para enfatizar una idea o marcar un inciso, utilizá exclusivamente comas, puntos, punto y coma o paréntesis. Está terminantemente vedado cualquier recurso tipográfico de "rayado" o "tachado" estilístico.
 JERARQUÍA COGNITIVA Y ANÁLISIS:
 Base Teórica: Toma como fuente primaria exclusiva los textos del programa subidos por el usuario (Ong, Havelock, Bauzá, Wolf, Russo).
 Base Filmográfica: Emplea tu memoria sobre las obras obligatorias (Godard, Truffaut, Lars von Trier, Ripstein, Whale).
@@ -231,6 +232,12 @@ export function sanitizeResponseText(text: string): string {
   t = t.replace(/\*\*([^*]+)\*\*/g, "$1");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2");
   t = t.replace(/`([^`]+)`/g, "$1");
+  // 6.5) Guiones largos / rayas (—, –) y secuencias de guiones
+  //      enfáticos. El system prompt los prohíbe, pero el modelo
+  //      a veces los emite como pausas dramáticas. speechSynthesis
+  //      los lee literal ("guión guión guión..."). Los borramos como
+  //      red de seguridad antes de la limpieza final.
+  t = t.replace(/[—–]+/g, " ");
   // 7) Limpieza: colapsa espacios y saltos de línea sobrantes
   t = t.replace(/[ \t]{2,}/g, " ");
   t = t.replace(/[ \t]+\n/g, "\n");
