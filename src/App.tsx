@@ -247,6 +247,10 @@ export default function App() {
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
   const keyRef = useRef(savedKey);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  /** Timeout del loop de TTS: cuando la última parte termina, se
+   *  reagenda speakPart() con un delay para reiniciar la lectura
+   *  desde el principio. null si no hay loop pendiente. */
+  const loopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   keyRef.current = savedKey;
   voicesRef.current = voices;
@@ -351,6 +355,10 @@ export default function App() {
     return () => {
       clearAllIntervals();
       if (keepAliveRef.current) clearInterval(keepAliveRef.current);
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
@@ -426,6 +434,13 @@ export default function App() {
     (text: string) => {
       if (!("speechSynthesis" in window)) return;
       const synth = window.speechSynthesis;
+      // Cancelar cualquier loop pendiente del speak() anterior (típico:
+      // llega una respuesta nueva mientras la anterior esperaba en su
+      // delay de loop). Sin esto, la utterance vieja podría re-dispararse.
+      if (loopTimeoutRef.current) {
+        clearTimeout(loopTimeoutRef.current);
+        loopTimeoutRef.current = null;
+      }
       synth.cancel(); // corta cualquier lectura previa
       stopWatchdog();
       speakActuallyPlayingRef.current = false;
@@ -473,6 +488,12 @@ export default function App() {
         }
         // Si el usuario pausó o cancelamos, no seguimos.
         if (phaseRef.current === "idle" || userPausedRef.current) return;
+        // Reseteamos isCancelingRef: si veníamos de un pause hecho
+        // durante el delay entre loops (donde no había utterance
+        // activa al disparar synth.cancel), el flag quedó en true
+        // y haría que esta nueva utterance no avance su onend. Lo
+        // limpiamos acá para que la cadena continúe normalmente.
+        isCancelingRef.current = false;
         partCharIndexRef.current = 0; // reset al arrancar cada chunk
         const partText = textPartsRef.current[partIndexRef.current];
         const u = new SpeechSynthesisUtterance(partText);
@@ -519,7 +540,19 @@ export default function App() {
             // Pequeño delay entre partes para que el motor respire.
             setTimeout(() => speakPart(), 40);
           } else {
-            finishAll("onend (last part)");
+            // LOOP: en vez de finalizar, reseteamos partIndex y
+            // reagendamos speakPart con un delay para que la respuesta
+            // vuelva a sonar desde el principio. Mantenemos
+            // phase="speaking" y status "Respondiendo…" para que el
+            // botón de voz siga mostrando Pausa y la cadena se pueda
+            // interrumpir (con el botón de voz o empezando a grabar).
+            partIndexRef.current = 0;
+            if (loopTimeoutRef.current) clearTimeout(loopTimeoutRef.current);
+            loopTimeoutRef.current = setTimeout(() => {
+              loopTimeoutRef.current = null;
+              if (userPausedRef.current || phaseRef.current === "idle") return;
+              speakPart();
+            }, 1500);
           }
         };
         u.onerror = (e) => {
@@ -623,6 +656,10 @@ export default function App() {
   const beginNewSession = useCallback(async () => {
     // 1) Cancelar cualquier reproducción de voz en curso
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    if (loopTimeoutRef.current) {
+      clearTimeout(loopTimeoutRef.current);
+      loopTimeoutRef.current = null;
+    }
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
     keepAliveRef.current = null;
 
