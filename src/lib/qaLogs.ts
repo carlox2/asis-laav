@@ -10,9 +10,10 @@
  *  - Si el token/repo no están configurados, no hace nada (silencioso).
  *  - Usa la GitHub Contents API: PUT /repos/{owner}/{repo}/contents/qa-logs/{file}
  *
- * Configuración (variables de entorno Vite, inyectadas en build):
- *  - VITE_GITHUB_TOKEN:    PAT fine-grained con permiso Contents: read+write
- *                          SOLO sobre este repo. (Secrets → Actions)
+ * Configuración (orden de prioridad para el token):
+ *  1. Panel "Configuración" de la app (localStorage "gem-github-token"):
+ *     el docente lo pega una vez en el navegador, sin redeploy.
+ *  2. Variable de entorno Vite VITE_GITHUB_TOKEN (Secrets → Actions).
  *  - VITE_GITHUB_REPO:     "owner/repo" (default: "carlox2/asis-laav")
  *  - VITE_QA_LOGS_DIR:     carpeta destino (default: "qa-logs")
  *  - VITE_QA_LOG_PREFIX:   prefijo del archivo (default: "asis-laav")
@@ -45,12 +46,27 @@ function env(key: string): string {
   }
 }
 
-export function isQALogEnabled(): boolean {
-  const token = env("VITE_GITHUB_TOKEN");
+export function isQALogEnabled(overrideToken?: string): boolean {
+  const token = resolveGithubToken(overrideToken);
   const repo = env("VITE_GITHUB_REPO") || "carlox2/asis-laav";
   if (!token || !repo.includes("/")) return false;
   if (env("VITE_QA_LOGS_ENABLED") === "0") return false;
   return true;
+}
+
+/**
+ * Token efectivo: 1) override explícito (panel de la app),
+ * 2) localStorage del navegador, 3) env de build.
+ */
+export function resolveGithubToken(overrideToken?: string): string {
+  if (overrideToken && overrideToken.trim()) return overrideToken.trim();
+  try {
+    const saved = localStorage.getItem("gem-github-token");
+    if (saved && saved.trim()) return saved.trim();
+  } catch {
+    /* sin persistencia */
+  }
+  return env("VITE_GITHUB_TOKEN");
 }
 
 function pad(n: number): string {
@@ -121,10 +137,13 @@ function buildQALogBody(p: QALogPayload, now = new Date()): string {
  * muestra UI: ante cualquier fallo solo hace console.debug y retorna.
  * No usa <input type="file"> ni showSaveFilePicker: cero interacción.
  */
-export async function saveQALogBackground(payload: QALogPayload): Promise<void> {
+export async function saveQALogBackground(
+  payload: QALogPayload,
+  opts?: { githubToken?: string }
+): Promise<void> {
   try {
     if (!payload?.answer?.trim()) return;
-    const token = env("VITE_GITHUB_TOKEN");
+    const token = resolveGithubToken(opts?.githubToken);
     const repo = env("VITE_GITHUB_REPO") || "carlox2/asis-laav";
     if (!token || !repo.includes("/")) return; // no configurado → silencioso
 

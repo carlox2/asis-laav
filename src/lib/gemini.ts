@@ -502,10 +502,11 @@ export async function expandAnswer(
           ...pdfParts,
           {
             text:
-              "Esta fue tu respuesta, pero quedó por debajo de las 200 palabras mínimas. " +
-              "Desarrollala hasta alcanzar entre 200 y 250 palabras, manteniendo prosa continua, " +
-              "sin saludos, sin listas, sin cuadros y sin usar el término 'adaptación'. " +
-              "Agregá precisiones teóricas de los PDFs y ejemplos fílmicos concretos. " +
+              "Esta fue tu respuesta, pero quedó por debajo de las 200 palabras mínimas y eso es INACEPTABLE. " +
+              "PROHIBIDO devolver menos de 200 palabras. Desarrollala hasta alcanzar entre 200 y 250 palabras, " +
+              "manteniendo prosa continua, sin saludos, sin listas, sin cuadros y sin usar el término 'adaptación'. " +
+              "Estrategia obligatoria: agregá al menos dos párrafos nuevos con precisiones teóricas de los PDFs " +
+              "(citas de autor, categorías) y ejemplos fílmicos concretos con análisis de procedimientos formales. " +
               "Devolvé la respuesta COMPLETA ampliada, no solo lo agregado:\n\n" +
               previousAnswer,
           },
