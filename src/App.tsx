@@ -46,7 +46,9 @@ import {
   SYSTEM_PROMPT,
   pickMimeType,
   sanitizeResponseText,
+  transcribeAudio,
 } from "./lib/gemini";
+import { saveQALogBackground } from "./lib/qaLogs";
 import {
   type AudioDevice,
   getSavedInputId,
@@ -842,6 +844,33 @@ export default function App() {
 
       sfx.ready(); // beep alegre: respuesta lista
       speak(text); // lectura automática en voz alta
+
+      // Guardado automático en GitHub (qa-logs/): segundo plano,
+      // sin file picker ni prompts al alumno. Fire-and-forget.
+      // Primero se transcribe LITERAL la pregunta en background y luego
+      // se guarda el txt con pregunta + respuesta. Si la transcripción
+      // falla, se guarda igual solo con la respuesta (fallback silencioso).
+      {
+        const logMime = mimeRef.current;
+        const logBytes = blob.size;
+        const logDuration = elapsedRef.current;
+        void (async () => {
+          let transcript: string | undefined;
+          try {
+            transcript = await transcribeAudio(base64, logMime, effectiveKey);
+          } catch {
+            transcript = undefined;
+          }
+          await saveQALogBackground({
+            answer: text,
+            questionTranscript: transcript,
+            model: GEMINI_MODEL,
+            audioBytes: logBytes,
+            audioMime: logMime,
+            durationMs: logDuration,
+          });
+        })();
+      }
     } catch (err) {
       if (thinkRef.current) clearInterval(thinkRef.current);
       thinkRef.current = null;
