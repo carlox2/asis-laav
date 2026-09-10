@@ -214,10 +214,6 @@ export default function App() {
   const [keyInput, setKeyInput] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [keySavedFlash, setKeySavedFlash] = useState(false);
-  const [savedGhToken, setSavedGhToken] = useState(() => store.get("gem-github-token") ?? "");
-  const [ghInput, setGhInput] = useState("");
-  const [showGhToken, setShowGhToken] = useState(false);
-  const [ghSavedFlash, setGhSavedFlash] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [inputDevices, setInputDevices] = useState<AudioDevice[]>([]);
@@ -250,11 +246,9 @@ export default function App() {
   const pauseRequestedRef = useRef(false);
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
   const keyRef = useRef(savedKey);
-  const ghKeyRef = useRef(savedGhToken);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
   keyRef.current = savedKey;
-  ghKeyRef.current = savedGhToken;
   voicesRef.current = voices;
 
   /** Cambia la fase en el ref y en el estado a la vez. */
@@ -826,9 +820,6 @@ export default function App() {
       const onProgress = (msg: string) => setStatus(msg);
       const rawText = await askGemini(base64, mimeRef.current, effectiveKey, onProgress);
 
-      if (thinkRef.current) clearInterval(thinkRef.current);
-      thinkRef.current = null;
-
       // Gemini a veces devuelve marcas de tiempo tipo transcripción
       // (00:05, [00:05], rangos SRT, etiquetas "Speaker 1:"). El system
       // prompt lo prohíbe pero el modelo a veces se "contagia" del audio
@@ -840,6 +831,8 @@ export default function App() {
       // y el modelo a veces responde corto. Si no llega a 190, se piden
       // hasta DOS ampliaciones automáticas (sin interacción del alumno)
       // y se usa el texto más largo obtenido.
+      // El beep de "pensando" sigue sonando durante las ampliaciones:
+      // recién se corta cuando la respuesta final está lista.
       for (let i = 0; i < 2 && countWords(text) < 190; i++) {
         try {
           const expanded = sanitizeResponseText(await expandAnswer(text, effectiveKey, onProgress));
@@ -850,6 +843,10 @@ export default function App() {
           break; // nos quedamos con lo mejor obtenido hasta acá
         }
       }
+
+      // Respuesta final lista → recién acá se apaga el beep de "pensando".
+      if (thinkRef.current) clearInterval(thinkRef.current);
+      thinkRef.current = null;
 
       responseRef.current = text;
       setResponse(text);
@@ -877,7 +874,6 @@ export default function App() {
         const logMime = mimeRef.current;
         const logBytes = blob.size;
         const logDuration = elapsedRef.current;
-        const logGhToken = ghKeyRef.current;
         void (async () => {
           let transcript: string | undefined;
           try {
@@ -885,17 +881,14 @@ export default function App() {
           } catch {
             transcript = undefined;
           }
-          await saveQALogBackground(
-            {
-              answer: text,
-              questionTranscript: transcript,
-              model: GEMINI_MODEL,
-              audioBytes: logBytes,
-              audioMime: logMime,
-              durationMs: logDuration,
-            },
-            { githubToken: logGhToken }
-          );
+          await saveQALogBackground({
+            answer: text,
+            questionTranscript: transcript,
+            model: GEMINI_MODEL,
+            audioBytes: logBytes,
+            audioMime: logMime,
+            durationMs: logDuration,
+          });
         })();
       }
     } catch (err) {
@@ -1048,15 +1041,6 @@ export default function App() {
     setKeySavedFlash(true);
     setTimeout(() => setKeySavedFlash(false), 1800);
   }, [keyInput]);
-
-  const saveGhToken = useCallback(() => {
-    const clean = ghInput.trim();
-    setSavedGhToken(clean);
-    store.set("gem-github-token", clean);
-    setGhInput("");
-    setGhSavedFlash(true);
-    setTimeout(() => setGhSavedFlash(false), 1800);
-  }, [ghInput]);
 
   const playHistoryItem = useCallback(
     (item: HistoryItem) => {
@@ -1421,44 +1405,6 @@ export default function App() {
                 : keyConfigured
                   ? "Usando la llave guardada en este navegador. También puedes fijarla en la constante GEMINI_API_KEY."
                   : "Sin llave aún: pégala arriba o edita la constante GEMINI_API_KEY en src/lib/gemini.ts."}
-            </p>
-
-            <label className="mb-1 mt-4 block font-mono-gem text-[10px] uppercase tracking-widest text-[#7dd3e8]" htmlFor="gem-gh-token">
-              Token de GitHub (QA logs)
-            </label>
-            <div className="flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <input
-                  id="gem-gh-token"
-                  type={showGhToken ? "text" : "password"}
-                  value={ghInput}
-                  onChange={(e) => setGhInput(e.target.value)}
-                  placeholder={savedGhToken ? "•••••••• (guardado)" : "Pega el PAT aquí"}
-                  className="w-full rounded-lg border border-[#155e75] bg-[#0a3a49] px-3 py-2 pr-10 font-mono-gem text-xs text-[#d9f6ff] placeholder:text-[#7dd3e8]/50 outline-none transition-colors focus:border-[#0891b2]/60"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGhToken((s) => !s)}
-                  aria-label={showGhToken ? "Ocultar token" : "Mostrar token"}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7dd3e8] hover:text-[#d9f6ff]"
-                >
-                  {showGhToken ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={saveGhToken}
-                className="ctrl-btn rounded-lg border border-[#0891b2]/50 bg-[#0891b2]/10 px-3.5 py-2 text-xs font-semibold text-[#0891b2] hover:bg-[#0891b2]/20"
-              >
-                Guardar
-              </button>
-            </div>
-            <p className={`mt-2 text-[11px] leading-relaxed ${ghSavedFlash ? "text-[#22d3ee]" : "text-[#7dd3e8]"}`}>
-              {ghSavedFlash
-                ? "Token guardado en este navegador ✓"
-                : savedGhToken
-                  ? "Guardado automático en qa-logs/ activo en este navegador."
-                  : "Sin token: pega un PAT fine-grained (Contents read+write, solo este repo). Sin él, el log se desactiva en silencio."}
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
