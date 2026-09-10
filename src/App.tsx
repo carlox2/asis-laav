@@ -41,6 +41,8 @@ import { ensureAudio, sfx, setSfxMuted, SOUND_VOLUME, warmupOutput, setWarmupSin
 import {
   askGemini,
   blobToBase64,
+  countWords,
+  expandAnswer,
   GEMINI_API_KEY,
   GEMINI_MODEL,
   SYSTEM_PROMPT,
@@ -826,7 +828,22 @@ export default function App() {
       // prompt lo prohíbe pero el modelo a veces se "contagia" del audio
       // de entrada. La función sanitizeResponseText() los limpia como
       // red de seguridad antes de mostrar/leer el texto.
-      const text = sanitizeResponseText(rawText);
+      let text = sanitizeResponseText(rawText);
+
+      // Red de seguridad de extensión: la cátedra exige 200-250 palabras
+      // y el modelo a veces responde corto. Si no llega a 190, se pide
+      // UNA ampliación automática (sin interacción del alumno) y se usa
+      // el texto más largo de los dos.
+      if (countWords(text) < 190) {
+        try {
+          const expanded = sanitizeResponseText(await expandAnswer(text, effectiveKey, onProgress));
+          if (countWords(expanded) > countWords(text)) {
+            text = expanded;
+          }
+        } catch {
+          /* nos quedamos con la respuesta original */
+        }
+      }
 
       responseRef.current = text;
       setResponse(text);

@@ -130,7 +130,7 @@ Unidad 4: Monstruos. Obras: Frankenstein (Shelley vs. James Whale). Clave: El mo
 MODOS DE INTERACCIÓN: Responde preguntas complejas. Ejemplo: "Relacione el concepto de 'Transposición' de Sergio Wolf con la decisión de Godard de incluir a Fritz Lang como personaje en 'El Desprecio'".
 DIRECTRICES ESTRICTAS DE COMUNICACIÓN:
 1. Formato de salida: Responde directamente al planteo del alumno, suprimiendo saludos, fórmulas de cortesía y sugerencias accesorias.
-2. Extensión: Toda respuesta debe constar obligatoriamente de entre 200 y 250 palabras. EN PROSA CONTINUA, SIN CUADROS, SIN ENUMERACIONES TIPO BULLETS.
+2. Extensión: Toda respuesta debe constar obligatoriamente de entre 200 y 250 palabras. EN PROSA CONTINUA, SIN CUADROS, SIN ENUMERACIONES TIPO BULLETS. Verificación obligatoria: contá las palabras antes de finalizar; si no llegás a 200, desarrollá con más ejemplos fílmicos y precisiones teóricas hasta alcanzar el mínimo.
 3. Léxico vetado: Queda terminantemente PROHIBIDO utilizar el término 'adaptación'. Emplea exclusivamente 'transposición', entendida como recreación estética, política y hermenéutica.
 JERARQUÍA COGNITIVA Y ANÁLISIS:
 Base Teórica: Toma como fuente primaria exclusiva los textos del programa subidos por el usuario (Ong, Havelock, Bauzá, Wolf, Russo).
@@ -346,7 +346,9 @@ export async function askGemini(
           text:
             "Escuchá el audio adjunto y respondé según las instrucciones del sistema. " +
             "Tu respuesta debe fundamentarse exclusivamente en los dos PDFs cargados " +
-            "(01.U1_U2.pdf y 02.U3_U5.pdf).",
+            "(01.U1_U2.pdf y 02.U3_U5.pdf). " +
+            "Extensión obligatoria: entre 200 y 250 palabras, en prosa continua, " +
+            "sin saludos, sin listas y sin cuadros.",
         },
       ],
     },
@@ -462,6 +464,64 @@ export async function transcribeAudio(
   const text = sanitizeResponseText((response?.text ?? "").trim());
   if (!text) {
     throw new Error("Transcripción vacía.");
+  }
+  return text;
+}
+
+/** Cuenta palabras separadas por espacios (igual criterio que la UI). */
+export function countWords(text: string): number {
+  const t = (text ?? "").trim();
+  if (!t) return 0;
+  return t.split(/\s+/).length;
+}
+
+/**
+ * Ampliación automática: si la respuesta salió por debajo del mínimo
+ * (el modelo a veces ignora la extensión pedida), se le reenvía su propio
+ * texto con los PDFs y se le pide desarrollarlo hasta 200-250 palabras,
+ * en el mismo tono y formato. Se llama UNA sola vez por consulta, en
+ * segundo plano dentro del flujo de "processing" (sin interacción).
+ */
+export async function expandAnswer(
+  previousAnswer: string,
+  apiKey: string,
+  onProgress?: (msg: string) => void
+): Promise<string> {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey || cleanKey === "TU_API_KEY_AQUI") {
+    throw new Error("Sin API Key para ampliar.");
+  }
+  const ai = new GoogleGenAI({ apiKey: cleanKey });
+  onProgress?.("Ampliando respuesta…");
+  const pdfParts = await buildKnowledgeBaseParts(ai, onProgress);
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [
+      {
+        parts: [
+          ...pdfParts,
+          {
+            text:
+              "Esta fue tu respuesta, pero quedó por debajo de las 200 palabras mínimas. " +
+              "Desarrollala hasta alcanzar entre 200 y 250 palabras, manteniendo prosa continua, " +
+              "sin saludos, sin listas, sin cuadros y sin usar el término 'adaptación'. " +
+              "Agregá precisiones teóricas de los PDFs y ejemplos fílmicos concretos. " +
+              "Devolvé la respuesta COMPLETA ampliada, no solo lo agregado:\n\n" +
+              previousAnswer,
+          },
+        ],
+      },
+    ],
+    config: {
+      systemInstruction: SYSTEM_PROMPT,
+      maxOutputTokens: 2400,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      temperature: 0.3,
+    },
+  });
+  const text = sanitizeResponseText((response?.text ?? "").trim());
+  if (!text) {
+    throw new Error("Ampliación vacía.");
   }
   return text;
 }
